@@ -1,12 +1,17 @@
 const std = @import("std");
 const testing = std.testing;
 
-pub fn CreateMatrix(T: type, n_rows: usize, n_cols: usize) type {
+const MatrixError = error{
+    OnlyForSquareMatrix,
+};
+
+pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) type {
     return struct {
         const Self = @This();
 
         const rows = n_rows;
         const cols = n_cols;
+        const n_elements = n_rows * n_cols;
 
         values: std.ArrayList(T),
 
@@ -19,21 +24,26 @@ pub fn CreateMatrix(T: type, n_rows: usize, n_cols: usize) type {
             self.values.deinit();
         }
 
-        pub fn identity(self: *Self) void {
-            std.debug.assert(rows == cols);
-            std.debug.assert(self.values.capacity == rows * cols);
+        pub fn zeros(allocator: std.mem.Allocator) !Self {
+            var list = try std.ArrayList(f64).initCapacity(allocator, rows * cols);
+            list.appendNTimesAssumeCapacity(0.0, n_elements);
 
-            if (self.values.items.len != 0) {
-                self.values.clearAndFree();
-                self.values.ensureTotalCapacity(rows * cols) catch {
-                    !unreachable;
-                };
+            return Self{ .values = list };
+        }
+
+        pub fn identity(allocator: std.mem.Allocator) !Self {
+            var matrix = try zeros(allocator);
+            errdefer matrix.deinit();
+
+            if (rows != cols) {
+                return MatrixError.OnlyForSquareMatrix;
             }
-            self.values.appendNTimesAssumeCapacity(0.0, rows * cols);
 
             for (0..rows) |row| {
-                self.values.items[row * cols + row] = 1.0;
+                matrix.values.items[row * cols + row] = 1.0;
             }
+
+            return matrix;
         }
     };
 }
@@ -41,12 +51,15 @@ pub fn CreateMatrix(T: type, n_rows: usize, n_cols: usize) type {
 const Matrix2x2 = CreateMatrix(f64, 2, 2);
 
 test "create a identity matrix" {
-    var id_2 = try Matrix2x2.init(testing.allocator);
+    var id_2 = try Matrix2x2.identity(testing.allocator);
     defer id_2.deinit();
-    id_2.identity();
 
     try testing.expectApproxEqRel(1.0, id_2.values.items[0], 1e-6);
     try testing.expectApproxEqRel(0.0, id_2.values.items[1], 1e-6);
     try testing.expectApproxEqRel(0.0, id_2.values.items[2], 1e-6);
     try testing.expectApproxEqRel(1.0, id_2.values.items[3], 1e-6);
+}
+
+test "non square matrix can not be identity" {
+    try testing.expectError(MatrixError.OnlyForSquareMatrix, CreateMatrix(f64, 2, 1).identity(testing.allocator));
 }
