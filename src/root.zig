@@ -56,7 +56,17 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
             const rand = rnd.random();
 
             for (0..n_elements) |_| {
-                try list.append(rand.float(f64));
+                list.appendAssumeCapacity(rand.float(f64));
+            }
+
+            return Self{ .values = list };
+        }
+
+        pub fn create(allocator: std.mem.Allocator, values: []const T) !Self {
+            var list = try std.ArrayList(f64).initCapacity(allocator, rows * cols);
+
+            for (values) |value| {
+                list.appendAssumeCapacity(value);
             }
 
             return Self{ .values = list };
@@ -92,4 +102,14 @@ test "creating a matrix with random values" {
     try testing.expect(1 >= id_2.values.items[2]);
     try testing.expect(0 <= id_2.values.items[3]);
     try testing.expect(1 >= id_2.values.items[3]);
+}
+
+test "creating a matrix with input values" {
+    var id_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
+    defer id_2.deinit();
+
+    try testing.expectApproxEqRel(0.0, id_2.values.items[0], 1e-6);
+    try testing.expectApproxEqRel(2.0, id_2.values.items[1], 1e-6);
+    try testing.expectApproxEqRel(1.0, id_2.values.items[2], 1e-6);
+    try testing.expectApproxEqRel(6.0, id_2.values.items[3], 1e-6);
 }
