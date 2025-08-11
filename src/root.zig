@@ -45,6 +45,22 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
 
             return matrix;
         }
+
+        pub fn random(allocator: std.mem.Allocator) !Self {
+            var list = try std.ArrayList(f64).initCapacity(allocator, rows * cols);
+            var rnd = std.Random.DefaultPrng.init(blk: {
+                var seed: u64 = undefined;
+                try std.posix.getrandom(std.mem.asBytes(&seed));
+                break :blk seed;
+            });
+            const rand = rnd.random();
+
+            for (0..n_elements) |_| {
+                try list.append(rand.float(f64));
+            }
+
+            return Self{ .values = list };
+        }
     };
 }
 
@@ -62,4 +78,18 @@ test "create a identity matrix" {
 
 test "non square matrix can not be identity" {
     try testing.expectError(MatrixError.OnlyForSquareMatrix, CreateMatrix(f64, 2, 1).identity(testing.allocator));
+}
+
+test "creating a matrix with random values" {
+    var id_2 = try Matrix2x2.random(testing.allocator);
+    defer id_2.deinit();
+
+    try testing.expect(0 <= id_2.values.items[0]);
+    try testing.expect(1 >= id_2.values.items[0]);
+    try testing.expect(0 <= id_2.values.items[1]);
+    try testing.expect(1 >= id_2.values.items[1]);
+    try testing.expect(0 <= id_2.values.items[2]);
+    try testing.expect(1 >= id_2.values.items[2]);
+    try testing.expect(0 <= id_2.values.items[3]);
+    try testing.expect(1 >= id_2.values.items[3]);
 }
