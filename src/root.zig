@@ -71,6 +71,26 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
 
             return Self{ .values = list };
         }
+
+        pub fn add(allocator: std.mem.Allocator, input_1: Self, input_2: Self) !Self {
+            var list = try std.ArrayList(f64).initCapacity(allocator, rows * cols);
+
+            for (input_1.values.items, input_2.values.items) |a, b| {
+                list.appendAssumeCapacity(a + b);
+            }
+
+            return Self{ .values = list };
+        }
+
+        pub fn sub(allocator: std.mem.Allocator, input_1: Self, input_2: Self) !Self {
+            var list = try std.ArrayList(f64).initCapacity(allocator, rows * cols);
+
+            for (input_1.values.items, input_2.values.items) |a, b| {
+                list.appendAssumeCapacity(a - b);
+            }
+
+            return Self{ .values = list };
+        }
     };
 }
 
@@ -112,4 +132,40 @@ test "creating a matrix with input values" {
     try testing.expectApproxEqRel(2.0, id_2.values.items[1], 1e-6);
     try testing.expectApproxEqRel(1.0, id_2.values.items[2], 1e-6);
     try testing.expectApproxEqRel(6.0, id_2.values.items[3], 1e-6);
+}
+
+test "addition of matrices" {
+    var input_1 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
+    defer input_1.deinit();
+    var input_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, -2.0, 3.0, 6.5 });
+    defer input_2.deinit();
+
+    const actual = try Matrix2x2.add(testing.allocator, input_1, input_2);
+    defer actual.deinit();
+
+    const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, 0.0, 4.0, 12.5 });
+    defer expected.deinit();
+
+    try testing.expectApproxEqRel(expected.values.items[0], actual.values.items[0], 1e-6);
+    try testing.expectApproxEqRel(expected.values.items[1], actual.values.items[1], 1e-6);
+    try testing.expectApproxEqRel(expected.values.items[2], actual.values.items[2], 1e-6);
+    try testing.expectApproxEqRel(expected.values.items[3], actual.values.items[3], 1e-6);
+}
+
+test "substraction of matrices" {
+    var input_1 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
+    defer input_1.deinit();
+    var input_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, -2.0, 3.0, 6.5 });
+    defer input_2.deinit();
+
+    const actual = try Matrix2x2.sub(testing.allocator, input_1, input_2);
+    defer actual.deinit();
+
+    const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ -1.0, 4.0, -2.0, -0.5 });
+    defer expected.deinit();
+
+    try testing.expectApproxEqRel(expected.values.items[0], actual.values.items[0], 1e-6);
+    try testing.expectApproxEqRel(expected.values.items[1], actual.values.items[1], 1e-6);
+    try testing.expectApproxEqRel(expected.values.items[2], actual.values.items[2], 1e-6);
+    try testing.expectApproxEqRel(expected.values.items[3], actual.values.items[3], 1e-6);
 }
