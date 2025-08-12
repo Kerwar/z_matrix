@@ -3,14 +3,15 @@ const testing = std.testing;
 
 const MatrixError = error{
     OnlyForSquareMatrix,
+    WrongDimensions,
 };
 
-pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) type {
+pub fn CreateMatrix(T: type, comptime rows: usize, comptime cols: usize) type {
     return struct {
         const Self = @This();
 
-        const rows = n_rows;
-        const cols = n_cols;
+        const n_rows = rows;
+        const n_cols = cols;
         const n_elements = n_rows * n_cols;
 
         values: []T,
@@ -33,15 +34,13 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
         }
 
         pub fn identity(allocator: std.mem.Allocator) !Self {
+            comptime if (n_rows != n_cols) {
+                @compileError("The identity is only possible for square matrices.");
+            };
             var matrix = try zeros(allocator);
-            errdefer matrix.free(allocator);
 
-            if (rows != cols) {
-                return MatrixError.OnlyForSquareMatrix;
-            }
-
-            for (0..rows) |row| {
-                matrix.values[row * cols + row] = 1.0;
+            for (0..n_rows) |row| {
+                matrix.values[row * n_cols + row] = 1.0;
             }
 
             return matrix;
@@ -74,7 +73,7 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
         }
 
         pub fn at(self: *Self, row: usize, col: usize) *T {
-            return &self.values[row * cols + col];
+            return &self.values[row * n_cols + col];
         }
 
         pub fn add(allocator: std.mem.Allocator, input_1: Self, input_2: Self) !Self {
@@ -88,7 +87,7 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
         }
 
         pub fn sub(allocator: std.mem.Allocator, input_1: Self, input_2: Self) !Self {
-            const list = try allocator.alloc(T, n_elements);
+            const list = try allocator.alloc(T, n_rows * n_cols);
 
             for (list, input_1.values, input_2.values) |*element, a, b| {
                 element.* = a - b;
@@ -96,10 +95,31 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
 
             return Self{ .values = list };
         }
+
+        pub fn dot(self: *Self, input_1: anytype, input_2: anytype) !void {
+            comptime if (@field(@TypeOf(input_1), "n_cols") != @field(@TypeOf(input_2), "n_rows")) {
+                @compileError("The matrices have different dimensions, they can't be multiplyed.");
+            };
+
+            const input_1_cols = @field(@TypeOf(input_1), "n_cols");
+            const input_1_rows = @field(@TypeOf(input_1), "n_rows");
+            const input_2_cols = @field(@TypeOf(input_2), "n_cols");
+
+            for (0..input_1_rows) |i| {
+                for (0..input_2_cols) |j| {
+                    self.at(i, j).* = 0;
+
+                    for (0..input_1_cols) |k| {
+                        self.at(i, j).* += input_1.values[i * input_1_cols + k] * input_2.values[k * input_2_cols + j];
+                    }
+                }
+            }
+        }
     };
 }
 
 const Matrix2x2 = CreateMatrix(f64, 2, 2);
+const Matrix3x3 = CreateMatrix(f64, 3, 3);
 
 test "create a identity matrix" {
     var id_2 = try Matrix2x2.identity(testing.allocator);
@@ -109,10 +129,6 @@ test "create a identity matrix" {
     try testing.expectApproxEqRel(0.0, id_2.values[1], 1e-6);
     try testing.expectApproxEqRel(0.0, id_2.values[2], 1e-6);
     try testing.expectApproxEqRel(1.0, id_2.values[3], 1e-6);
-}
-
-test "non square matrix can not be identity" {
-    try testing.expectError(MatrixError.OnlyForSquareMatrix, CreateMatrix(f64, 2, 1).identity(testing.allocator));
 }
 
 test "creating a matrix with random values" {
@@ -177,6 +193,50 @@ test "substraction of matrices" {
     defer actual.free(testing.allocator);
 
     const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ -1.0, 4.0, -2.0, -0.5 });
+    defer expected.free(testing.allocator);
+
+    try testing.expectApproxEqRel(expected.values[0], actual.values[0], 1e-6);
+    try testing.expectApproxEqRel(expected.values[1], actual.values[1], 1e-6);
+    try testing.expectApproxEqRel(expected.values[2], actual.values[2], 1e-6);
+    try testing.expectApproxEqRel(expected.values[3], actual.values[3], 1e-6);
+}
+
+test "multiplication of matrices" {
+    var input_1 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
+    defer input_1.free(testing.allocator);
+    var input_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, -2.0, 3.0, 6.5 });
+    defer input_2.free(testing.allocator);
+
+    var actual = try Matrix2x2.init(testing.allocator);
+    defer actual.free(testing.allocator);
+    try actual.dot(input_1, input_2);
+
+    const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ 6.0, 13.0, 19.0, 37.0 });
+    defer expected.free(testing.allocator);
+
+    try testing.expectApproxEqRel(expected.values[0], actual.values[0], 1e-6);
+    try testing.expectApproxEqRel(expected.values[1], actual.values[1], 1e-6);
+    try testing.expectApproxEqRel(expected.values[2], actual.values[2], 1e-6);
+    try testing.expectApproxEqRel(expected.values[3], actual.values[3], 1e-6);
+}
+
+test "multiplication of matrices of different dimensions" {
+    var input_1 = try CreateMatrix(f64, 2, 1).create(testing.allocator, &[_]f64{
+        0.0,
+        2.0,
+    });
+    defer input_1.free(testing.allocator);
+    var input_2 = try CreateMatrix(f64, 1, 2).create(testing.allocator, &[_]f64{
+        1.0,
+        -2.0,
+    });
+    defer input_2.free(testing.allocator);
+
+    var actual = try Matrix2x2.init(testing.allocator);
+    defer actual.free(testing.allocator);
+    try actual.dot(input_1, input_2);
+
+    const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 0.0, 2.0, -4.0 });
     defer expected.free(testing.allocator);
 
     try testing.expectApproxEqRel(expected.values[0], actual.values[0], 1e-6);
