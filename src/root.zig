@@ -96,21 +96,21 @@ pub fn CreateMatrix(T: type, comptime rows: usize, comptime cols: usize) type {
             return Self{ .values = list };
         }
 
-        pub fn dot(self: *Self, input_1: anytype, input_2: anytype) !void {
-            comptime if (@field(@TypeOf(input_1), "n_cols") != @field(@TypeOf(input_2), "n_rows")) {
+        pub fn dot(self: *Self, left: anytype, right: anytype) !void {
+            comptime if (@field(@TypeOf(left), "n_cols") != @field(@TypeOf(right), "n_rows")) {
                 @compileError("The matrices have different dimensions, they can't be multiplyed.");
             };
 
-            const input_1_cols = @field(@TypeOf(input_1), "n_cols");
-            const input_1_rows = @field(@TypeOf(input_1), "n_rows");
-            const input_2_cols = @field(@TypeOf(input_2), "n_cols");
+            const left_cols = @field(@TypeOf(left), "n_cols");
+            const left_rows = @field(@TypeOf(left), "n_rows");
+            const right_cols = @field(@TypeOf(right), "n_cols");
 
-            for (0..input_1_rows) |i| {
-                for (0..input_2_cols) |j| {
+            for (0..left_rows) |i| {
+                for (0..right_cols) |j| {
                     self.at(i, j).* = 0;
 
-                    for (0..input_1_cols) |k| {
-                        self.at(i, j).* += input_1.values[i * input_1_cols + k] * input_2.values[k * input_2_cols + j];
+                    for (0..left_cols) |k| {
+                        self.at(i, j).* += left.values[i * left_cols + k] * right.values[k * right_cols + j];
                     }
                 }
             }
