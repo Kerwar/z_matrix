@@ -19,7 +19,7 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
             return Self{ .values = try allocator.alloc(T, n_elements) };
         }
 
-        pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
+        pub fn free(self: Self, allocator: std.mem.Allocator) void {
             allocator.free(self.values);
         }
 
@@ -34,7 +34,7 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
 
         pub fn identity(allocator: std.mem.Allocator) !Self {
             var matrix = try zeros(allocator);
-            errdefer matrix.deinit(allocator);
+            errdefer matrix.free(allocator);
 
             if (rows != cols) {
                 return MatrixError.OnlyForSquareMatrix;
@@ -74,7 +74,7 @@ pub fn CreateMatrix(T: type, comptime n_rows: usize, comptime n_cols: usize) typ
         }
 
         pub fn at(self: *Self, row: usize, col: usize) *T {
-            return &self.values[row * n_cols + col];
+            return &self.values[row * cols + col];
         }
 
         pub fn add(allocator: std.mem.Allocator, input_1: Self, input_2: Self) !Self {
@@ -103,7 +103,7 @@ const Matrix2x2 = CreateMatrix(f64, 2, 2);
 
 test "create a identity matrix" {
     var id_2 = try Matrix2x2.identity(testing.allocator);
-    defer id_2.deinit(testing.allocator);
+    defer id_2.free(testing.allocator);
 
     try testing.expectApproxEqRel(1.0, id_2.values[0], 1e-6);
     try testing.expectApproxEqRel(0.0, id_2.values[1], 1e-6);
@@ -117,7 +117,7 @@ test "non square matrix can not be identity" {
 
 test "creating a matrix with random values" {
     var id_2 = try Matrix2x2.random(testing.allocator);
-    defer id_2.deinit(testing.allocator);
+    defer id_2.free(testing.allocator);
 
     try testing.expect(0 <= id_2.values[0]);
     try testing.expect(1 >= id_2.values[0]);
@@ -131,7 +131,7 @@ test "creating a matrix with random values" {
 
 test "creating a matrix with input values" {
     var id_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
-    defer id_2.deinit(testing.allocator);
+    defer id_2.free(testing.allocator);
 
     try testing.expectApproxEqRel(0.0, id_2.values[0], 1e-6);
     try testing.expectApproxEqRel(2.0, id_2.values[1], 1e-6);
@@ -141,7 +141,7 @@ test "creating a matrix with input values" {
 
 test "the at method gets the right values" {
     var id_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
-    defer id_2.deinit(testing.allocator);
+    defer id_2.free(testing.allocator);
 
     try testing.expectApproxEqRel(0.0, id_2.at(0, 0).*, 1e-6);
     try testing.expectApproxEqRel(2.0, id_2.at(0, 1).*, 1e-6);
@@ -151,15 +151,15 @@ test "the at method gets the right values" {
 
 test "addition of matrices" {
     var input_1 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
-    defer input_1.deinit(testing.allocator);
+    defer input_1.free(testing.allocator);
     var input_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, -2.0, 3.0, 6.5 });
-    defer input_2.deinit(testing.allocator);
+    defer input_2.free(testing.allocator);
 
     const actual = try Matrix2x2.add(testing.allocator, input_1, input_2);
-    defer actual.deinit(testing.allocator);
+    defer actual.free(testing.allocator);
 
     const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, 0.0, 4.0, 12.5 });
-    defer expected.deinit(testing.allocator);
+    defer expected.free(testing.allocator);
 
     try testing.expectApproxEqRel(expected.values[0], actual.values[0], 1e-6);
     try testing.expectApproxEqRel(expected.values[1], actual.values[1], 1e-6);
@@ -169,15 +169,15 @@ test "addition of matrices" {
 
 test "substraction of matrices" {
     var input_1 = try Matrix2x2.create(testing.allocator, &[_]f64{ 0.0, 2.0, 1.0, 6.0 });
-    defer input_1.deinit(testing.allocator);
+    defer input_1.free(testing.allocator);
     var input_2 = try Matrix2x2.create(testing.allocator, &[_]f64{ 1.0, -2.0, 3.0, 6.5 });
-    defer input_2.deinit(testing.allocator);
+    defer input_2.free(testing.allocator);
 
     const actual = try Matrix2x2.sub(testing.allocator, input_1, input_2);
-    defer actual.deinit(testing.allocator);
+    defer actual.free(testing.allocator);
 
     const expected = try Matrix2x2.create(testing.allocator, &[_]f64{ -1.0, 4.0, -2.0, -0.5 });
-    defer expected.deinit(testing.allocator);
+    defer expected.free(testing.allocator);
 
     try testing.expectApproxEqRel(expected.values[0], actual.values[0], 1e-6);
     try testing.expectApproxEqRel(expected.values[1], actual.values[1], 1e-6);
